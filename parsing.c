@@ -316,6 +316,20 @@ lval* lval_take(lval* v, int i) {
     return x;
 }
 
+lval* builtin_init(lval* a) {
+    LASSERT(a, a->count == 1,
+        "Function 'init' passed wrong number of arguments!");
+    LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
+        "Function 'init' passed a non-Q-Expression!");
+    LASSERT(a, a->cell[0]->count != 0,
+        "Function 'init' passed {}!");
+
+    lval* q = lval_take(a, 0);
+    lval_del(lval_pop(q, q->count - 1));
+
+    return q;
+}
+
 lval* builtin_len(lval* a) {
     LASSERT(a, a->count == 1,
         "Function 'len' passed wrong number of arguments!");
@@ -472,6 +486,7 @@ lval* builtin(lval* a, char* func) {
     if(strcmp("eval", func) == 0) return builtin_eval(a);
     if(strcmp("cons", func) == 0) return builtin_cons(a);
     if(strcmp("len", func) == 0) return builtin_len(a);
+    if(strcmp("init", func) == 0) return builtin_init(a);
     if(strstr("+-/*%^", func) || strcmp("max", func) == 0 || strcmp("min", func) == 0) return builtin_op(a, func);
     lval_del(a);
     return lval_err("Unknown function!");
@@ -534,7 +549,7 @@ int main(int argc, char** argv) {
             number  : <float> | <integer> ;                                   \
             symbol  : '+' | '-' | '*' | '/' | '%' | '^' | \"min\" | \"max\"   \
                     | \"list\" | \"head\" | \"tail\" | \"join\" | \"eval\"    \
-                    | \"cons\" | \"len\" ;                                    \
+                    | \"cons\" | \"len\" | \"init\" ;                         \
             qexpr   : '{' <expr>* '}' ;                                       \
             sexpr   : '(' <expr>* ')' ;                                       \
             expr    : <number> | <symbol> | <sexpr> | <qexpr>;                \
