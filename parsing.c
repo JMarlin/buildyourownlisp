@@ -48,11 +48,20 @@ typedef lval*(*lbuiltin)(lenv*, lval*);
 /* Declare lval struct */
 struct lval {
     int type;
+
+    /* Basic */
     long inum;
     double fnum;
     char* err;
     char* sym;
-    lbuiltin fun;
+
+    /* Function */
+    lbuiltin builtin;
+    lenv* env;
+    lval* formals;
+    lval* body;
+
+    /* Expression */
     int count;
     struct lval** cell;
 };
@@ -66,7 +75,7 @@ struct lenv {
 lval* lval_fun(lbuiltin func) {
     lval* v = malloc(sizeof(lval));
     v->type = LVAL_FUN;
-    v->fun = func;
+    v->builtin = func;
     return v;
 }
 
@@ -156,8 +165,15 @@ void lval_del(lval* v) {
         /* Do nothing special for number types */
         case LVAL_FLOAT:
         case LVAL_INT:
-        case LVAL_FUN:
             break;
+
+        case LVAL_FUN:
+            if(!v->builtin) {
+                lenv_del(v->env);
+                lenv_del(v->formals);
+                lenv_del(v->body);
+            }
+        break;
 
         /* For Err or Sym free the string data */
         case LVAL_ERR: free(v->err); break;
@@ -232,8 +248,18 @@ lval* lval_copy(lval*v ) {
 
     switch(v->type) {
 
+        case LVAL_FUN:
+            if(v->builtin) {
+                x->builtin = v->builtin;
+            } else {
+                x->builtin = NULL;
+                x->env = lenv_copy(v->env);
+                x->formals = lval_copy(v->formals);
+                x->body = lval_copy(v->body);
+            }
+        break;
+
         /* Copy functions and numbers directly */
-        case LVAL_FUN: x->fun = v->fun; break;
         case LVAL_FLOAT: x->fnum = v->fnum; break;
         case LVAL_INT: x->inum = v->inum; break;
 
@@ -333,7 +359,14 @@ void lval_print(lval* v) {
         case LVAL_SYM:   printf(v->sym); break;
         case LVAL_SEXPR: lval_expr_print(v, '(', ')'); break;
         case LVAL_QEXPR: lval_expr_print(v, '{', '}'); break;
-        case LVAL_FUN:   printf("<function>"); break;
+        case LVAL_FUN:
+            if(!v->builtin) {
+                printf("<native code>");
+            } else {
+                printf("(\\ "); lval_print(v->formals);
+                putchar(' '); lval_print(v->body); putchar(')');
+            }
+        break;
     }
 }
 
@@ -475,6 +508,22 @@ lval* lval_take(lval* v, int i) {
     lval* x = lval_pop(v, i);
     lval_del(v);
     return x;
+}
+
+lval* lval_lambda(lval* formals, lval* body) {
+    lval* v = malloc(sizeof(lval));
+    v->type = LVAL_FUN;
+
+    /* Set Builtin to Null */
+    v->builtin = NULL;
+
+    /* Build new environment */
+    v->env = lenv_new();
+
+    /* Set Formals and body */
+    v->formals = formals;
+    v->body = body;
+    return v;
 }
 
 lval* builtin_init(lenv* e, lval* a) {
@@ -767,7 +816,7 @@ lval* lval_eval_sexpr(lenv* e, lval* v) {
     }
 
     /* Call builtin with operator */
-    lval* result = f->fun(e, v);
+    lval* result = f->builtin(e, v);
     lval_del(f);
     return result;
 }
