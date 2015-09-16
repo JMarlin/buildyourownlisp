@@ -626,6 +626,7 @@ lval* lval_lambda(lval* formals, lval* body) {
 }
 
 lval* builtin_eval(lenv* e, lval* a);
+lval* builtin_list(lenv* e, lval* a);
 
 lval* lval_call(lenv* e, lval* f, lval* a) {
 
