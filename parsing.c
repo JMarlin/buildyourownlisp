@@ -532,11 +532,10 @@ lval* eval_op_float(lval* x, char* op, lval* y, int arg_count) {
             if(strcmp(op, "^") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : lval_float((double)powf(x->fnum, y->fnum));
             if(strcmp(op, "min") == 0) ret_val = arg_count == 0 ? lval_err("Too few arguments") : (arg_count == 1 ? x : (x->fnum < y->fnum ? x : y));
             if(strcmp(op, "max") == 0) ret_val = arg_count == 0 ? lval_err("Too few arguments") : (arg_count == 1 ? x : (x->fnum > y->fnum ? x : y));
-            if(strcmp(op, "<") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->fnum < y->fnum ? x : lval_float(0));
-            if(strcmp(op, ">") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->fnum > y->fnum ? x : lval_float(0));
-            if(strcmp(op, "==") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->fnum == y->fnum ? x : lval_float(0));
-            if(strcmp(op, "<=") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->fnum <= y->fnum ? x : lval_float(0));
-            if(strcmp(op, ">=") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->fnum >= y->fnum ? x : lval_float(0));
+            if(strcmp(op, "<") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->fnum < y->fnum ? lval_float(1) : lval_float(0));
+            if(strcmp(op, ">") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->fnum > y->fnum ? lval_float(1) : lval_float(0));
+            if(strcmp(op, "<=") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->fnum <= y->fnum ? lval_float(1) : lval_float(0));
+            if(strcmp(op, ">=") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->fnum >= y->fnum ? lval_float(1) : lval_float(0));
         }
 
         if(ret_val != x) lval_del(x);
@@ -565,11 +564,10 @@ lval* eval_op_int(lval* x, char* op, lval* y, int arg_count) {
         if(strcmp(op, "^") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : lval_int(powl(x->inum, y->inum));
         if(strcmp(op, "min") == 0) ret_val = arg_count == 0 ? lval_err("Too few arguments") : (arg_count == 1 ? x : (x->inum < y->inum ? x : y));
         if(strcmp(op, "max") == 0) ret_val = arg_count == 0 ? lval_err("Too few arguments") : (arg_count == 1 ? x : (x->inum > y->inum ? x : y));
-        if(strcmp(op, "<") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->inum < y->inum ? x : lval_int(0));
-        if(strcmp(op, ">") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->inum > y->inum ? x : lval_int(0));
-        if(strcmp(op, "==") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->inum == y->inum ? x : lval_int(0));
-        if(strcmp(op, "<=") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->inum <= y->inum ? x : lval_int(0));
-        if(strcmp(op, ">=") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->inum >= y->inum ? x : lval_int(0));
+        if(strcmp(op, "<") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->inum < y->inum ? lval_int(1) : lval_int(0));
+        if(strcmp(op, ">") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->inum > y->inum ? lval_int(1) : lval_int(0));
+        if(strcmp(op, "<=") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->inum <= y->inum ? lval_int(1) : lval_int(0));
+        if(strcmp(op, ">=") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->inum >= y->inum ? lval_int(1) : lval_int(0));
     }
 
     if(ret_val != x) lval_del(x);
@@ -579,6 +577,67 @@ lval* eval_op_int(lval* x, char* op, lval* y, int arg_count) {
         return lval_err("Invalid integer operation");
     else
         return ret_val;
+}
+
+int lval_eq(lval* x, lval* y) {
+
+    /* If either of the inputs are floats, make them both floats */
+    if(x->type == LVAL_FLOAT || y->type == LVAL_FLOAT) {
+
+        x = lval_to_float(x);
+        y = lval_to_float(y);
+    }
+
+    /* Different types are always unequal */
+    if(x->type != y->type) return 0;
+
+    /* Compare based upon type */
+    switch(x->type) {
+
+        /* Compare numeric value */
+        case LVAL_INT: return (x->inum == y->inum);
+        case LVAL_FLOAT: return (x->fnum == y->fnum);
+
+        /* Compare string values */
+        case LVAL_ERR: return (strcmp(x->err, y->err) == 0);
+        case LVAL_SYM: return (strcmp(x->sym, y->sym) == 0);
+
+        /* If builtin, compare pointers. Otherwise, compare formals and body */
+        case LVAL_FUN:
+            if(x->builtin || y->builtin)
+                return x->builtin == y->builtin;
+            else
+                return lval_eq(x->formals, y->formals) &&
+                    lval_eq(x->body, y->body);
+
+        case LVAL_QEXPR:
+        case LVAL_SEXPR:
+            if(x->count != y->count) return 0;
+            /* If any element not equal, nothing is equal */
+            for(int i = 0; i < x->count; i++)
+                if(!lval_eq(x->cell[i], y->cell[i])) return 0;
+            /* Otherwise, lists must be equal */
+            return 1;
+        break;
+    }
+
+    return 0;
+}
+
+lval* builtin_eq(lenv* e, lval* a) {
+
+    LASSERT_NUM("==", a, 2);
+    int r = lval_eq(a->cell[0], a->cell[1]);
+    lval_del(a);
+    return lval_int(r);
+}
+
+lval* builtin_ne(lenv* e, lval* a) {
+
+    LASSERT_NUM("!=", a, 2);
+    int r = !lval_eq(a->cell[0], a->cell[1]);
+    lval_del(a);
+    return lval_int(r);
 }
 
 lval* lval_eval(lenv* e, lval* v);
@@ -857,7 +916,7 @@ lval* builtin_if(lenv* e, lval* a) {
     LASSERT_NUM("if", a, 3);
 
     //First arg should be an int or a float
-    LASSERT(a, a->cell[0]->type == LVAL_INT || a->cell[1]->type == LVAL_FLOAT,
+    LASSERT(a, a->cell[0]->type == LVAL_INT || a->cell[0]->type == LVAL_FLOAT,
         "First argument to if must be a numeric expression. Found %s instead.", ltype_name(a->cell[0]->type));
 
     //Next two args should be q-expressions
@@ -866,24 +925,23 @@ lval* builtin_if(lenv* e, lval* a) {
 
     //Check to make sure the number is nonzero
     lval* eval_expr;
-    lval* number = lval_pop(a, 0);
-    if((number->type == LVAL_INT && number->inum != 0) ||
-        (number->type == LVAL_FLOAT && number->fnum != 0.0)) {
+    a->cell[1]->type = LVAL_SEXPR;
+    a->cell[2]->type = LVAL_SEXPR;
+    if((a->cell[0]->type == LVAL_INT && a->cell[0]->inum != 0) ||
+        (a->cell[0]->type == LVAL_FLOAT && a->cell[0]->fnum != 0.0)) {
 
         //If nonzero, get the first expression
-        eval_expr = lval_pop(a, 0);
+        eval_expr = lval_eval(e, lval_pop(a, 1));
     } else {
 
         //If zero, get the second expression
-        eval_expr = lval_pop(a, 1);
+        eval_expr = lval_eval(e, lval_pop(a, 2));
     }
 
-    //Drop unused values
-    lval_del(number);
     lval_del(a);
 
     //Evaluate the selected expression
-    builtin_eval(e, lval_add(lval_sexpr(), eval_expr));
+    return eval_expr;
 }
 
 lval* builtin_join(lenv* e, lval* a) {
@@ -1036,10 +1094,6 @@ lval* builtin_gt(lenv* e, lval* a) {
     return builtin_op(e, a, ">");
 }
 
-lval* builtin_eq(lenv* e, lval* a) {
-    return builtin_op(e, a, "==");
-}
-
 lval* builtin_gte(lenv* e, lval* a) {
     return builtin_op(e, a, ">=");
 }
@@ -1075,9 +1129,10 @@ void lenv_add_builtins(lenv* e) {
     lenv_add_builtin(e, "min", builtin_min);
     lenv_add_builtin(e, "<", builtin_lt);
     lenv_add_builtin(e, ">", builtin_gt);
-    lenv_add_builtin(e, "==", builtin_eq);
     lenv_add_builtin(e, ">=", builtin_gte);
     lenv_add_builtin(e, "<=", builtin_lte);
+    lenv_add_builtin(e, "==", builtin_eq);
+    lenv_add_builtin(e, "!=", builtin_ne);
 }
 
 lval* lval_eval_sexpr(lenv* e, lval* v) {
