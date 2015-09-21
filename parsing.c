@@ -532,6 +532,11 @@ lval* eval_op_float(lval* x, char* op, lval* y, int arg_count) {
             if(strcmp(op, "^") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : lval_float((double)powf(x->fnum, y->fnum));
             if(strcmp(op, "min") == 0) ret_val = arg_count == 0 ? lval_err("Too few arguments") : (arg_count == 1 ? x : (x->fnum < y->fnum ? x : y));
             if(strcmp(op, "max") == 0) ret_val = arg_count == 0 ? lval_err("Too few arguments") : (arg_count == 1 ? x : (x->fnum > y->fnum ? x : y));
+            if(strcmp(op, "<") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->fnum < y->fnum ? x : lval_float(0));
+            if(strcmp(op, ">") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->fnum > y->fnum ? x : lval_float(0));
+            if(strcmp(op, "==") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->fnum == y->fnum ? x : lval_float(0));
+            if(strcmp(op, "<=") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->fnum <= y->fnum ? x : lval_float(0));
+            if(strcmp(op, ">=") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->fnum >= y->fnum ? x : lval_float(0));
         }
 
         if(ret_val != x) lval_del(x);
@@ -560,6 +565,11 @@ lval* eval_op_int(lval* x, char* op, lval* y, int arg_count) {
         if(strcmp(op, "^") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : lval_int(powl(x->inum, y->inum));
         if(strcmp(op, "min") == 0) ret_val = arg_count == 0 ? lval_err("Too few arguments") : (arg_count == 1 ? x : (x->inum < y->inum ? x : y));
         if(strcmp(op, "max") == 0) ret_val = arg_count == 0 ? lval_err("Too few arguments") : (arg_count == 1 ? x : (x->inum > y->inum ? x : y));
+        if(strcmp(op, "<") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->inum < y->inum ? x : lval_int(0));
+        if(strcmp(op, ">") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->inum > y->inum ? x : lval_int(0));
+        if(strcmp(op, "==") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->inum == y->inum ? x : lval_int(0));
+        if(strcmp(op, "<=") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->inum <= y->inum ? x : lval_int(0));
+        if(strcmp(op, ">=") == 0) ret_val = arg_count < 2 ? lval_err("Too few arguments") : (x->inum >= y->inum ? x : lval_int(0));
     }
 
     if(ret_val != x) lval_del(x);
@@ -841,6 +851,41 @@ lval* lval_join(lval* x, lval* y) {
     return x;
 }
 
+lval* builtin_if(lenv* e, lval* a) {
+
+    //Should be three args
+    LASSERT_NUM("if", a, 3);
+
+    //First arg should be an int or a float
+    LASSERT(a, a->cell[0]->type == LVAL_INT || a->cell[1]->type == LVAL_FLOAT,
+        "First argument to if must be a numeric expression. Found %s instead.", ltype_name(a->cell[0]->type));
+
+    //Next two args should be q-expressions
+    LASSERT_TYPE("if", a, 1, LVAL_QEXPR);
+    LASSERT_TYPE("if", a, 2, LVAL_QEXPR);
+
+    //Check to make sure the number is nonzero
+    lval* eval_expr;
+    lval* number = lval_pop(a, 0);
+    if((number->type == LVAL_INT && number->inum != 0) ||
+        (number->type == LVAL_FLOAT && number->fnum != 0.0)) {
+
+        //If nonzero, get the first expression
+        eval_expr = lval_pop(a, 0);
+    } else {
+
+        //If zero, get the second expression
+        eval_expr = lval_pop(a, 1);
+    }
+
+    //Drop unused values
+    lval_del(number);
+    lval_del(a);
+
+    //Evaluate the selected expression
+    builtin_eval(e, lval_add(lval_sexpr(), eval_expr));
+}
+
 lval* builtin_join(lenv* e, lval* a) {
 
     LASSERT(a, a->count > 0, "Function join requires arguments.");
@@ -983,6 +1028,26 @@ lval* builtin_max(lenv* e, lval* a) {
     return builtin_op(e, a, "max");
 }
 
+lval* builtin_lt(lenv* e, lval* a) {
+    return builtin_op(e, a, "<");
+}
+
+lval* builtin_gt(lenv* e, lval* a) {
+    return builtin_op(e, a, ">");
+}
+
+lval* builtin_eq(lenv* e, lval* a) {
+    return builtin_op(e, a, "==");
+}
+
+lval* builtin_gte(lenv* e, lval* a) {
+    return builtin_op(e, a, ">=");
+}
+
+lval* builtin_lte(lenv* e, lval* a) {
+    return builtin_op(e, a, "<=");
+}
+
 void lenv_add_builtins(lenv* e) {
     /* List functions */
     lenv_add_builtin(e, "list", builtin_list);
@@ -997,6 +1062,7 @@ void lenv_add_builtins(lenv* e) {
     lenv_add_builtin(e, "=", builtin_put);
     lenv_add_builtin(e, "exit", builtin_exit);
     lenv_add_builtin(e, "\\", builtin_lambda);
+    lenv_add_builtin(e, "if", builtin_if);
 
     /* Math operations */
     lenv_add_builtin(e, "+", builtin_add);
@@ -1007,6 +1073,11 @@ void lenv_add_builtins(lenv* e) {
     lenv_add_builtin(e, "^", builtin_pow);
     lenv_add_builtin(e, "max", builtin_max);
     lenv_add_builtin(e, "min", builtin_min);
+    lenv_add_builtin(e, "<", builtin_lt);
+    lenv_add_builtin(e, ">", builtin_gt);
+    lenv_add_builtin(e, "==", builtin_eq);
+    lenv_add_builtin(e, ">=", builtin_gte);
+    lenv_add_builtin(e, "<=", builtin_lte);
 }
 
 lval* lval_eval_sexpr(lenv* e, lval* v) {
